@@ -7,16 +7,19 @@ const tokens = (value) => {
 };
 
 describe("Token", () => {
-  let token;
+  let token, accounts, deployer;
 
+  const TOTAL_SUPPLY = "1000000"; // ether
   const name = "Hiduino";
   const symbol = "HVD";
   const decimals = 18;
-  const totalSupply = "1000000";
+  const totalSupply = tokens(TOTAL_SUPPLY); // wei
 
   beforeEach(async () => {
     const Token = await ethers.getContractFactory("Token");
-    token = await Token.deploy(name, symbol, totalSupply);
+    token = await Token.deploy(name, symbol, TOTAL_SUPPLY);
+    accounts = await ethers.getSigners();
+    deployer = accounts[0];
   });
 
   describe("Deployment", () => {
@@ -33,7 +36,11 @@ describe("Token", () => {
     });
 
     it("has correct total supply", async () => {
-      expect(await token.totalSupply()).to.equal(tokens(totalSupply));
+      expect(await token.totalSupply()).to.equal(totalSupply);
+    });
+
+    it("assings total supply to deployer", async () => {
+      expect(await token.balanceOf(deployer.address)).to.equal(totalSupply);
     });
   });
 });
