@@ -9,7 +9,7 @@ const toWei = (value) => {
 const fromWei = (num) => ethers.utils.formatEther(num);
 
 describe("Token", () => {
-  let token, accounts, deployer, receiver;
+  let token, accounts, deployer, receiver, exchange;
 
   const totalSupplyEth = "1000000"; // ether
   const name = "Hiduino";
@@ -23,6 +23,7 @@ describe("Token", () => {
     accounts = await ethers.getSigners();
     deployer = accounts[0];
     receiver = accounts[1];
+    exchange = accounts[2];
   });
 
   describe("Deployment", () => {
@@ -108,6 +109,51 @@ describe("Token", () => {
 
         await expect(
           token.connect(deployer).transfer(invalidRecepient, toWei(amount))
+        ).to.be.revertedWith("Invalid address");
+      });
+    });
+  });
+
+  describe("Approving Token", () => {
+    let amount, transation, result;
+
+    describe("Success", () => {
+      beforeEach(async () => {
+        amount = 100;
+        transation = await token
+          .connect(deployer)
+          .approve(exchange.address, toWei(amount));
+        result = await transation.wait();
+      });
+
+      it("alocates an allowance for delegated token spending", async () => {
+        expect(
+          await token.allowance(deployer.address, exchange.address)
+        ).to.equal(toWei(amount));
+      });
+
+      it("emits an Approval event", async () => {
+        const event = result.events[0];
+        const args = event.args;
+
+        expect(result.events).to.have.lengthOf(1);
+        expect(event.event).to.equal("Approval");
+        expect(args.owner).to.equal(deployer.address);
+        expect(args.spender).to.equal(exchange.address);
+        expect(args.value).to.equal(toWei(amount));
+      });
+    });
+
+    describe("Failure", () => {
+      it.only("rejects invalid spender", async () => {
+        amount = 10;
+        const invalidRecepient = "0x0000000000000000000000000000000000000000";
+        await expect(
+          token.connect(deployer).approve(invalidRecepient, toWei(amount))
+        ).to.be.reverted;
+
+        await expect(
+          token.connect(deployer).approve(invalidRecepient, toWei(amount))
         ).to.be.revertedWith("Invalid address");
       });
     });
