@@ -96,4 +96,89 @@ describe("Exchange", () => {
       });
     });
   });
+
+  describe("Withdrawing Tokens", () => {
+    let transation, result;
+    let amount = 10;
+
+    describe("Success", () => {
+      beforeEach(async () => {
+        transation = await token1
+          .connect(user1)
+          .approve(exchange.address, toWei(amount));
+        result = await transation.wait();
+
+        transation = await exchange
+          .connect(user1)
+          .depositToken(token1.address, toWei(amount));
+        result = await transation.wait();
+
+        transation = await exchange
+          .connect(user1)
+          .withdrawToken(token1.address, toWei(amount));
+        result = await transation.wait();
+      });
+
+      it("withdwaw token funds", async () => {
+        expect(await token1.balanceOf(exchange.address)).to.equal(toWei(0));
+
+        expect(await exchange.tokens(token1.address, user1.address)).to.equal(
+          toWei(0)
+        );
+
+        expect(
+          await exchange.balanceOf(token1.address, user1.address)
+        ).to.equal(toWei(0));
+      });
+
+      it("emits a Withdraw event", async () => {
+        const event = result.events[1];
+        const args = event.args;
+
+        expect(result.events).to.have.lengthOf(2); // Two events: Transfer and Deposit
+        expect(event.event).to.equal("Withdraw");
+        expect(args.token).to.equal(token1.address);
+        expect(args.user).to.equal(user1.address);
+        expect(args.amount).to.equal(toWei(amount));
+        expect(args.balance).to.equal(toWei(0));
+      });
+    });
+
+    describe("Failure", () => {
+      it("fails for insufficient balance", async () => {
+        // Attempt to withdraw tokens without deposit
+        await expect(
+          exchange.connect(user1).depositToken(token1.address, toWei(amount))
+        ).to.be.reverted;
+        await expect(
+          exchange.connect(user1).depositToken(token1.address, toWei(amount))
+        ).to.be.revertedWith("Transfer amount exceeds allowance");
+      });
+    });
+  });
+
+  describe("Checking Balances", () => {
+    let transation, result;
+    let amount = 10;
+
+    beforeEach(async () => {
+      // Approve token
+      transation = await token1
+        .connect(user1)
+        .approve(exchange.address, toWei(amount));
+      result = await transation.wait();
+
+      // Depposit token
+      transation = await exchange
+        .connect(user1)
+        .depositToken(token1.address, toWei(amount));
+      result = await transation.wait();
+    });
+
+    it.only("returns user balance", async () => {
+      expect(await exchange.balanceOf(token1.address, user1.address)).to.equal(
+        toWei(amount)
+      );
+    });
+  });
 });
