@@ -2,11 +2,8 @@ const { expect } = require("chai");
 const { ethers } = require("hardhat");
 
 const toWei = (value) => {
-  // const value = ethers.utils.parseEther("1000000");
   return ethers.utils.parseUnits(value.toString(), "ether");
 };
-
-const fromWei = (num) => ethers.utils.formatEther(num);
 
 describe("Token", () => {
   let token, accounts, deployer, receiver, exchange;
@@ -76,9 +73,6 @@ describe("Token", () => {
         expect(args.from).to.equal(deployer.address);
         expect(args.to).to.equal(receiver.address);
         expect(args.value).to.equal(toWei(amount));
-        // expect(args["_from"]).to.equal(deployer.address);
-        // expect(args["_to"]).to.equal(receiver.address);
-        // expect(args["_value"]).to.equal(toWei(amount));
       });
     });
 
@@ -145,7 +139,7 @@ describe("Token", () => {
     });
 
     describe("Failure", () => {
-      it.only("rejects invalid spender", async () => {
+      it("rejects invalid spender", async () => {
         amount = 10;
         const invalidRecepient = "0x0000000000000000000000000000000000000000";
         await expect(
@@ -155,6 +149,78 @@ describe("Token", () => {
         await expect(
           token.connect(deployer).approve(invalidRecepient, toWei(amount))
         ).to.be.revertedWith("Invalid address");
+      });
+    });
+  });
+
+  describe("Delegating Token Tansfer", () => {
+    let amount, transation, result;
+    beforeEach(async () => {
+      amount = 100;
+      transation = await token
+        .connect(deployer)
+        .approve(exchange.address, toWei(amount));
+      result = await transation.wait();
+    });
+
+    describe("Success", () => {
+      beforeEach(async () => {
+        transation = await token
+          .connect(exchange)
+          .transferFrom(deployer.address, receiver.address, toWei(amount));
+        result = await transation.wait();
+      });
+
+      it("Transfers token balance", async () => {
+        expect(await token.balanceOf(deployer.address)).to.equal(
+          toWei(Number(totalSupplyEth) - amount)
+        );
+        expect(await token.balanceOf(receiver.address)).to.equal(toWei(amount));
+      });
+
+      it("resets allowance", async () => {
+        expect(
+          await token.allowance(deployer.address, exchange.address)
+        ).to.equal(0);
+      });
+
+      it("emits a transfer event", async () => {
+        const event = result.events[0];
+        const args = event.args;
+
+        expect(result.events).to.have.lengthOf(1);
+        expect(event.event).to.equal("Transfer");
+        expect(args.from).to.equal(deployer.address);
+        expect(args.to).to.equal(receiver.address);
+        expect(args.value).to.equal(toWei(amount));
+      });
+    });
+
+    describe("failure", () => {
+      it("rejects amounts exceeds balance", async () => {
+        const invalidAmount = 100000000;
+        await expect(
+          token
+            .connect(exchange)
+            .transferFrom(
+              deployer.address,
+              receiver.address,
+              toWei(invalidAmount)
+            )
+        ).to.be.reverted;
+      });
+
+      it("rejects amounts exceeds balance correct message error", async () => {
+        const invalidAmount = 100000000;
+        await expect(
+          token
+            .connect(exchange)
+            .transferFrom(
+              deployer.address,
+              receiver.address,
+              toWei(invalidAmount)
+            )
+        ).to.be.revertedWith("Transfer amount exceeds balance");
       });
     });
   });
