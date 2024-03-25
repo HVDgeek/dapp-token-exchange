@@ -6,7 +6,7 @@ const toWei = (value) => {
 };
 
 describe("Exchange", () => {
-  let exchange, token1, token2, accounts, deployer, feeAccount, user1;
+  let exchange, token1, token2, accounts, deployer, feeAccount, user1, user2;
   const feePercent = 10;
 
   beforeEach(async () => {
@@ -20,6 +20,7 @@ describe("Exchange", () => {
     deployer = accounts[0];
     feeAccount = accounts[1];
     user1 = accounts[2];
+    user2 = accounts[3];
 
     // Transfer token from Deployer to User1
     let transation = await token1
@@ -230,7 +231,7 @@ describe("Exchange", () => {
 
     describe("Failure", () => {
       amount = 10;
-      it.only("rejects with no balance", async () => {
+      it("rejects with no balance", async () => {
         await expect(
           exchange
             .connect(user1)
@@ -242,6 +243,80 @@ describe("Exchange", () => {
             .connect(user1)
             .makeOrder(token2.address, toWei(1), token1.address, toWei(1))
         ).to.be.revertedWith("Insufficient balance");
+      });
+    });
+  });
+
+  describe("Order actions", () => {
+    let transation, result;
+    let amount = 1;
+
+    beforeEach(async () => {
+      transation = await token1
+        .connect(user1)
+        .approve(exchange.address, toWei(amount));
+      result = await transation.wait();
+
+      transation = await exchange
+        .connect(user1)
+        .depositToken(token1.address, toWei(amount));
+      result = await transation.wait();
+
+      transation = await exchange
+        .connect(user1)
+        .makeOrder(token2.address, toWei(1), token1.address, toWei(1));
+      result = await transation.wait();
+    });
+
+    describe("Cancelling orders", async () => {
+      describe("Success", () => {
+        beforeEach(async () => {
+          transation = await exchange.connect(user1).cancelOrder(1);
+          result = await transation.wait();
+        });
+
+        it("updates canceled orders", async () => {
+          expect(await exchange.connect(user1).ordersCancelled(1)).to.equal(
+            true
+          );
+        });
+
+        it("emits an Cancel order event", async () => {
+          const event = result.events[0];
+          const args = event.args;
+
+          expect(result.events).to.have.lengthOf(1);
+          expect(event.event).to.equal("Cancel");
+          expect(args.id).to.equal(1);
+          expect(args.user).to.equal(user1.address);
+          expect(args.tokenGet).to.equal(token2.address);
+          expect(args.amountGet).to.equal(toWei(1));
+          expect(args.tokenGive).to.equal(token1.address);
+          expect(args.amountGive).to.equal(toWei(1));
+          expect(args).to.have.property("timestamp");
+          expect(args.timestamp).to.at.least(1);
+        });
+      });
+
+      describe("Failure", () => {
+        it("rejects invalid order ids", async () => {
+          const invalidOrderId = 9999;
+
+          await expect(exchange.connect(user1).cancelOrder(invalidOrderId)).to
+            .be.reverted;
+
+          await expect(
+            exchange.connect(user1).cancelOrder(invalidOrderId)
+          ).to.be.revertedWith("Order does not exist");
+        });
+
+        it("rejects unauthorized cancelations", async () => {
+          await expect(exchange.connect(user2).cancelOrder(1)).to.be.reverted;
+
+          await expect(
+            exchange.connect(user2).cancelOrder(1)
+          ).to.be.revertedWith("You are not the owner of this order");
+        });
       });
     });
   });
