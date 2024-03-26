@@ -1,30 +1,25 @@
 import { useEffect } from "react";
-import { ethers } from "ethers";
 import config from "./config.json";
-import "./App.css";
-import TOKEN_ABI from "./abis/Token.json";
+import {
+  loadProvider,
+  loadNetwork,
+  loadAccount,
+  loadToken,
+} from "./store/interactions";
 
 function App() {
   const loadBlockchainData = async () => {
-    const accounts = await window.ethereum.request({
-      method: "eth_requestAccounts",
-    });
+    await loadAccount();
 
-    const provider = new ethers.providers.Web3Provider(window.ethereum);
-    const { chainId } = await provider.getNetwork();
+    const provider = loadProvider();
+    const chainId = await loadNetwork(provider);
 
-    const token = new ethers.Contract(
-      config[chainId].DApp.address,
-      TOKEN_ABI,
-      provider
-    );
-
-    console.log({ SYMBOL: await token.symbol() });
+    await loadToken(provider, config[chainId].DApp.address);
   };
 
   useEffect(() => {
     loadBlockchainData();
-  }, []);
+  });
 
   return (
     <div>
